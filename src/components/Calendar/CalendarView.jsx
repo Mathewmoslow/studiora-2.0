@@ -1,26 +1,425 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Calendar, Clock, BookOpen, Plus, X, Check, FileText, Download, Upload, Edit2, Trash2, Brain, RefreshCw, ChevronLeft, ChevronRight, AlertCircle, CheckCircle, Settings } from 'lucide-react';
 
-// API Configuration
-const API_CONFIG = {
-  endpoint: 'https://api.openai.com/v1/chat/completions',
-  model: 'gpt-4',
-  temperature: 0.3,
-  maxTokens: 10000
-};
+// StudiorAI Service
+class StudiorAIService {
+  constructor(apiKey, options = {}) {
+    this.apiKey = apiKey;
+    this.model = options.model || 'gpt-4';
+    this.baseURL = options.baseURL || 'https://api.openai.com/v1';
+    this.timeout = 60000;
+    this.maxRetries = 3;
+  }
 
-// Dual Parser Component
-function StudioraDualParser({ onParsed, onError }) {
-  const [content, setContent] = useState('');
+  async enhanceRegexResults(assignments, originalText, options = {}) {
+    const { onProgress } = options;
+    onProgress?.({ stage: 'ai-enhance', message: 'AI enhancing assignments...' });
+
+    const prompt = this.buildEnhancementPrompt(assignments, originalText);
+
+    try {
+      const result = await this.makeRequest(prompt, { temperature: 0.2 });
+      const enhanced = this.mergeEnhancements(assignments, result);
+      
+      return {
+        validatedAssignments: enhanced,
+        confidence: enhanced.length > 0 ? 0.9 : 0.7,
+        insights: [`Enhanced ${enhanced.length} assignments`]
+      };
+    } catch (error) {
+      console.error('AI enhancement failed:', error);
+      return {
+        validatedAssignments: assignments,
+        confidence: 0.7,
+        insights: ['Enhancement failed, using original assignments']
+      };
+    }
+  }
+
+  async findAdditionalAssignments(remainingText, existingAssignments, options = {}) {
+    const { onProgress } = options;
+    onProgress?.({ stage: 'ai-additional', message: 'Searching for additional assignments...' });
+
+    const prompt = this.buildAdditionalSearchPrompt(remainingText, existingAssignments);
+
+    try {
+      const result = await this.makeRequest(prompt, { temperature: 0.3 });
+      return this.validateResult(result);
+    } catch (error) {
+      console.error('AI additional search failed:', error);
+      return { assignments: [] };
+    }
+  }
+
+  buildEnhancementPrompt(assignments, originalText) {
+    return `You are enhancing structured assignment data.
+
+INSTRUCTIONS:
+- Use the surrounding original text to fill in or correct the assignment details.
+- Fix vague descriptions and approximate values.
+- Improve each entry's accuracy without removing valid items.
+- Return JSON ONLY in the format below. Do not wrap in markdown.
+
+ORIGINAL TEXT:
+${originalText.substring(0, 5000)}
+
+ASSIGNMENTS TO ENHANCE:
+${JSON.stringify(assignments, null, 2)}
+
+OUTPUT FORMAT:
+{
+  "enhancedAssignments": [
+    {
+      "id": "original_id",
+      "isValid": true,
+      "text": "Enhanced description",
+      "date": "YYYY-MM-DD",
+      "type": "assignment_type",
+      "hours": 1.5,
+      "enhancements": ["what was improved"]
+    }
+  ]
+}`;
+  }
+
+  buildAdditionalSearchPrompt(remainingText, existingAssignments) {
+    return `You are detecting assignments that may have been missed.
+
+RULES:
+- Do not duplicate any existing assignment.
+- Look for implicit, preparatory, or narrative-format tasks.
+- Treat review, prep, or study suggestions as assignments if actionable.
+- Output ONLY clean JSON in this format:
+
+{
+  "assignments": [
+    {
+      "text": "Assignment description",
+      "date": "YYYY-MM-DD or null",
+      "type": "assignment_type",
+      "hours": 1.5,
+      "reason": "Why this is an assignment"
+    }
+  ]
+}
+
+ALREADY FOUND:
+${existingAssignments.slice(0, 5).map(a => `- ${a.text} (${a.date})`).join('\n')}
+${existingAssignments.length > 5 ? `...and ${existingAssignments.length - 5} more` : ''}
+
+REMAINING TEXT:
+${remainingText.substring(0, 10000)}`;
+  }
+
+  async makeRequest(prompt, options = {}) {
+    const { temperature = 0.3 } = options;
+    
+    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+        const response = await fetch(`${this.baseURL}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: this.model,
+            messages: [
+              {
+                role: 'system',
+                content: 'You are an expert AI parser. Return only valid, parsable JSON. Never return markdown or prose.'
+              },
+              {
+                role: 'user',
+                content: prompt
+              }
+            ],
+            temperature,
+            max_tokens: 4000
+          }),
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(`API error ${response.status}: ${error.error?.message || 'Unknown error'}`);
+        }
+
+        const data = await response.json();
+        const content = data.choices[0]?.message?.content;
+
+        if (!content) throw new Error('No content in API response');
+        return this.parseJSON(content);
+      } catch (error) {
+        console.warn(`Attempt ${attempt} failed:`, error.message);
+        if (attempt === this.maxRetries) throw error;
+        await this.delay(Math.pow(2, attempt) * 1000);
+      }
+    }
+  }
+
+  parseJSON(content) {
+    const cleaned = content.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
+    try {
+      return JSON.parse(cleaned);
+    } catch (error) {
+      const match = cleaned.match(/\{[\s\S]*\}/);
+      if (match) return JSON.parse(match[0]);
+      throw new Error('Failed to parse AI response as JSON');
+    }
+  }
+
+  mergeEnhancements(originalAssignments, enhancementResult) {
+    const enhanced = enhancementResult.enhancedAssignments || [];
+    const enhancedMap = new Map(enhanced.map(e => [e.id, e]));
+    
+    return originalAssignments.map(original => {
+      const enhancement = enhancedMap.get(original.id);
+      if (enhancement && enhancement.isValid) {
+        return {
+          ...original,
+          ...enhancement,
+          aiEnhanced: true,
+          source: 'regex+ai'
+        };
+      }
+      return original;
+    }).filter(a => {
+      const enhancement = enhancedMap.get(a.id);
+      return !enhancement || enhancement.isValid !== false;
+    });
+  }
+
+  validateResult(result) {
+    if (!result || typeof result !== 'object') return { assignments: [] };
+    
+    const assignments = (result.assignments || []).filter(a => a.text && a.text.length > 5).map(a => ({
+      ...a,
+      id: a.id || `ai_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      date: this.validateDate(a.date),
+      type: a.type || 'assignment',
+      hours: this.validateHours(a.hours),
+      confidence: Math.max(0, Math.min(1, a.confidence || 0.8)),
+      source: 'ai'
+    }));
+    
+    return { ...result, assignments };
+  }
+
+  validateDate(dateString) {
+    if (!dateString) return null;
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return null;
+      const year = date.getFullYear();
+      if (year < 2024 || year > 2026) return null;
+      return date.toISOString().split('T')[0];
+    } catch {
+      return null;
+    }
+  }
+
+  validateHours(hours) {
+    const h = parseFloat(hours);
+    if (isNaN(h)) return 1.5;
+    return Math.max(0.25, Math.min(8, h));
+  }
+
+  delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+}
+
+// Calendar View Component
+function CalendarView({ course, assignments = [], completedAssignments, onToggleAssignment, onUpdateAssignment, allCourses = [], showAllCourses = true }) {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentView, setCurrentView] = useState('month');
+  const [studyBlocks, setStudyBlocks] = useState([]);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [preferences, setPreferences] = useState({
+    dailyMax: 4,
+    weekendMax: 6,
+    blockDuration: 1.5,
+    bufferDays: 3,
+    difficultyMultiplier: 1.2,
+    energyLevel: 'medium'
+  });
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState({});
+  const [manualEvents, setManualEvents] = useState([]);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showReschedulePrompt, setShowReschedulePrompt] = useState(false);
+  const [viewMode, setViewMode] = useState(showAllCourses ? 'all' : 'single');
+  
+  // Parsing states
+  const [showParseModal, setShowParseModal] = useState(false);
+  const [parseContent, setParseContent] = useState('');
   const [docType, setDocType] = useState('mixed');
-  const [isLoading, setIsLoading] = useState(false);
-  const [parseMethod, setParseMethod] = useState('hybrid');
-  const [error, setError] = useState('');
-  const [parsedData, setParsedData] = useState(null);
-  const [confidenceScores, setConfidenceScores] = useState(null);
+  const [isParsingMode, setIsParsingMode] = useState('hybrid');
+  const [isParsingContent, setIsParsingContent] = useState(false);
+  const [parseProgress, setParseProgress] = useState('');
+  const [parseError, setParseError] = useState('');
+  const [parseResults, setParseResults] = useState(null);
+  
+  const [newEvent, setNewEvent] = useState({
+    title: '',
+    date: new Date().toISOString().split('T')[0],
+    type: 'event',
+    hours: 1,
+    description: '',
+    time: '09:00',
+    needsStudyTime: false,
+    courseCode: course?.code || ''
+  });
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
-  // Get API key from environment variable
+  // Get API key
   const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+
+  // Get all assignments from all courses if in 'all' view mode
+  const allAssignments = useMemo(() => {
+    if (viewMode === 'all' && allCourses.length > 0) {
+      return allCourses.flatMap(c =>
+        c.assignments.map(a => ({ ...a, courseCode: c.code, courseName: c.name }))
+      );
+    }
+    return assignments.map(a => ({ ...a, courseCode: course.code, courseName: course.name }));
+  }, [viewMode, allCourses, assignments, course]);
+
+  // Enhanced parsing function
+  const handleParseContent = async () => {
+    if (!parseContent.trim()) {
+      setParseError('Please paste content to parse');
+      return;
+    }
+
+    setIsParsingContent(true);
+    setParseError('');
+    setParseResults(null);
+    setParseProgress('Starting content analysis...');
+
+    try {
+      // First, parse with regex patterns
+      setParseProgress('Analyzing document structure...');
+      await delay(800);
+      
+      const regexResults = parseWithRegex(parseContent, docType);
+      setParseProgress('Found initial assignments via pattern matching...');
+      await delay(600);
+
+      let finalResults = regexResults.results;
+      let confidence = regexResults.confidence;
+
+      // AI Enhancement (if API key available and hybrid/ai mode)
+      if (apiKey && (isParsingMode === 'hybrid' || isParsingMode === 'ai')) {
+        const aiService = new StudiorAIService(apiKey);
+        
+        setParseProgress('Initializing AI enhancement...');
+        await delay(500);
+
+        // Progress callback for AI operations
+        const onProgress = ({ stage, message }) => {
+          setParseProgress(message);
+        };
+
+        try {
+          // Enhance existing results
+          if (finalResults.length > 0) {
+            setParseProgress('AI enhancing assignment details...');
+            await delay(700);
+            
+            const enhancementResult = await aiService.enhanceRegexResults(
+              finalResults.flatMap(m => m.assignments), 
+              parseContent,
+              { onProgress }
+            );
+            
+            // Update assignments with enhancements
+            finalResults = finalResults.map(module => ({
+              ...module,
+              assignments: module.assignments.map(assignment => {
+                const enhanced = enhancementResult.validatedAssignments.find(
+                  e => e.text === assignment.text
+                );
+                return enhanced || assignment;
+              })
+            }));
+            
+            confidence = Math.max(confidence, enhancementResult.confidence * 100);
+          }
+
+          // Find additional assignments
+          setParseProgress('Searching for additional assignments...');
+          await delay(600);
+          
+          const additionalResult = await aiService.findAdditionalAssignments(
+            parseContent,
+            finalResults.flatMap(m => m.assignments),
+            { onProgress }
+          );
+
+          if (additionalResult.assignments && additionalResult.assignments.length > 0) {
+            // Add additional assignments to first module or create new one
+            if (finalResults.length === 0) {
+              finalResults.push({
+                week: 1,
+                title: 'Additional Assignments',
+                assignments: []
+              });
+            }
+            
+            const additionalAssignments = additionalResult.assignments.map(a => ({
+              ...a,
+              date: a.date ? new Date(a.date) : null,
+              source: 'ai-additional'
+            }));
+            
+            finalResults[0].assignments.push(...additionalAssignments);
+            confidence = Math.max(confidence, 85);
+          }
+
+          setParseProgress('AI enhancement complete!');
+          await delay(400);
+          
+        } catch (aiError) {
+          console.error('AI enhancement failed:', aiError);
+          setParseProgress('AI enhancement failed, using pattern results...');
+          await delay(500);
+        }
+      }
+
+      setParseProgress('Finalizing results...');
+      await delay(300);
+
+      if (!finalResults || finalResults.length === 0) {
+        throw new Error('No assignments found. Try a different document type or parsing method.');
+      }
+
+      setParseResults({
+        modules: finalResults,
+        confidence: Math.round(confidence),
+        totalAssignments: finalResults.reduce((sum, m) => sum + m.assignments.length, 0)
+      });
+      
+      setParseProgress('Parse complete!');
+
+    } catch (err) {
+      setParseError(err.message);
+      setParseProgress('');
+    } finally {
+      setIsParsingContent(false);
+    }
+  };
 
   // Regex patterns for different document types
   const patterns = {
@@ -67,9 +466,11 @@ function StudioraDualParser({ onParsed, onError }) {
         if (assignmentMatch && currentModule) {
           totalMatches++;
           const assignment = {
+            id: `regex_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             text: assignmentMatch[1].trim(),
             date: parseDate(assignmentMatch[2]),
-            type: detectAssignmentType(assignmentMatch[1])
+            type: detectAssignmentType(assignmentMatch[1]),
+            source: 'regex'
           };
 
           // Extract points if present
@@ -102,9 +503,11 @@ function StudioraDualParser({ onParsed, onError }) {
       assignmentMatches.forEach(match => {
         if (results.length > 0) {
           results[results.length - 1].assignments.push({
+            id: `regex_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             text: match[1].trim(),
             date: parseDate(match[2]),
-            type: detectAssignmentType(match[1])
+            type: detectAssignmentType(match[1]),
+            source: 'regex'
           });
         }
       });
@@ -171,340 +574,8 @@ function StudioraDualParser({ onParsed, onError }) {
     return 'assignment';
   };
 
-  // AI Parser using OpenAI
-  const parseWithAI = async (text, type) => {
-    if (!apiKey || !apiKey.trim()) {
-      throw new Error('OpenAI API key not configured. Please check your environment variables.');
-    }
-
-    const systemPrompt = `You are an expert at parsing academic documents and extracting structured information. 
-    Extract assignments, due dates, and organize them by modules/weeks. 
-    Return valid JSON only, no markdown or explanation.`;
-
-    const userPrompt = `Parse this ${type} document and extract all assignments with their due dates. 
-    Return JSON in this exact format:
-    {
-      "modules": [
-        {
-          "week": 1,
-          "title": "Module Title",
-          "assignments": [
-            {
-              "text": "Assignment name",
-              "date": "2024-01-15",
-              "type": "quiz|exam|paper|discussion|lab|project|reading|video|clinical|assignment",
-              "points": 10
-            }
-          ]
-        }
-      ],
-      "confidence": 95
-    }
-    
-    Document to parse:
-    ${text}`;
-
-    try {
-      const response = await fetch(API_CONFIG.endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: import.meta.env.VITE_AI_MODEL || API_CONFIG.model,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt }
-          ],
-          temperature: parseFloat(import.meta.env.VITE_AI_TEMPERATURE) || API_CONFIG.temperature,
-          max_tokens: API_CONFIG.maxTokens
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || 'AI parsing failed');
-      }
-
-      const data = await response.json();
-      const content = data.choices[0].message.content;
-
-      // Parse JSON response
-      const parsed = JSON.parse(content);
-
-      // Convert to expected format
-      const results = parsed.modules.map(module => ({
-        week: module.week,
-        title: module.title,
-        assignments: module.assignments.map(a => ({
-          ...a,
-          date: a.date ? new Date(a.date) : null
-        }))
-      }));
-
-      return { results, confidence: parsed.confidence || 90 };
-    } catch (error) {
-      console.error('AI parsing error:', error);
-      throw error;
-    }
-  };
-
-  // Main parse function
-  const handleParse = async () => {
-    if (!content.trim()) {
-      setError('Please paste content to parse');
-      return;
-    }
-
-    setIsLoading(true);
-    setError('');
-    setParsedData(null);
-    setConfidenceScores(null);
-
-    try {
-      let results = null;
-      let aiResults = null;
-      let regexResults = null;
-      let finalConfidence = 0;
-
-      if (parseMethod === 'ai' || parseMethod === 'hybrid') {
-        try {
-          const aiParsed = await parseWithAI(content, docType);
-          aiResults = aiParsed.results;
-          finalConfidence = aiParsed.confidence;
-        } catch (aiError) {
-          console.error('AI parsing failed:', aiError);
-          if (parseMethod === 'ai') {
-            throw aiError;
-          }
-        }
-      }
-
-      if (parseMethod === 'regex' || parseMethod === 'hybrid') {
-        const regexParsed = parseWithRegex(content, docType);
-        regexResults = regexParsed.results;
-        if (!aiResults) {
-          finalConfidence = regexParsed.confidence;
-        }
-      }
-
-      // Combine results if hybrid
-      if (parseMethod === 'hybrid' && aiResults && regexResults) {
-        results = mergeResults(aiResults, regexResults);
-        finalConfidence = Math.max(aiResults.confidence || 0, regexResults.confidence || 0);
-      } else {
-        results = aiResults || regexResults;
-      }
-
-      if (!results || results.length === 0) {
-        throw new Error('No assignments found. Try a different document type or parsing method.');
-      }
-
-      setParsedData(results);
-      setConfidenceScores({ overall: finalConfidence });
-      onParsed(results);
-    } catch (err) {
-      setError(err.message);
-      onError(err.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Merge AI and regex results
-  const mergeResults = (aiResults, regexResults) => {
-    const merged = [...aiResults];
-
-    // Add any unique assignments from regex results
-    regexResults.forEach(regexModule => {
-      const existingModule = merged.find(m => m.week === regexModule.week);
-      if (existingModule) {
-        regexModule.assignments.forEach(regexAssignment => {
-          const exists = existingModule.assignments.some(a =>
-            a.text.toLowerCase() === regexAssignment.text.toLowerCase()
-          );
-          if (!exists) {
-            existingModule.assignments.push(regexAssignment);
-          }
-        });
-      } else {
-        merged.push(regexModule);
-      }
-    });
-
-    return merged;
-  };
-
-  return (
-    <div className="bg-white rounded-lg shadow-lg p-6">
-      <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
-        <Brain className="mr-2" />
-        Smart Course Parser
-      </h2>
-
-      {/* Parse Method Selection */}
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Parsing Method
-        </label>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setParseMethod('hybrid')}
-            className={`px-4 py-2 rounded ${parseMethod === 'hybrid' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
-          >
-            Hybrid (Recommended)
-          </button>
-          <button
-            onClick={() => setParseMethod('ai')}
-            className={`px-4 py-2 rounded ${parseMethod === 'ai' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
-          >
-            AI Only
-          </button>
-          <button
-            onClick={() => setParseMethod('regex')}
-            className={`px-4 py-2 rounded ${parseMethod === 'regex' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
-          >
-            Pattern Only
-          </button>
-        </div>
-      </div>
-
-      {/* Document Type Selection */}
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Document Type
-        </label>
-        <select
-          value={docType}
-          onChange={(e) => setDocType(e.target.value)}
-          className="w-full p-2 border rounded"
-        >
-          <option value="mixed">Auto-Detect</option>
-          <option value="canvas-modules">Canvas Modules Page</option>
-          <option value="canvas-assignments">Canvas Assignments Page</option>
-          <option value="syllabus">Course Syllabus</option>
-          <option value="schedule">Course Schedule/Outline</option>
-        </select>
-      </div>
-
-      {/* Content Input */}
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Paste Course Content
-        </label>
-        <textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          placeholder="Paste your Canvas page, syllabus, or course schedule here..."
-          className="w-full h-64 p-3 border rounded-lg resize-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
-
-      {/* Error Display */}
-      {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded flex items-start">
-          <AlertCircle className="w-5 h-5 text-red-600 mr-2 mt-0.5" />
-          <span className="text-sm text-red-800">{error}</span>
-        </div>
-      )}
-
-      {/* Parse Button */}
-      <button
-        onClick={handleParse}
-        disabled={isLoading || (!apiKey && parseMethod !== 'regex')}
-        className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 flex items-center justify-center"
-      >
-        {isLoading ? (
-          <>
-            <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
-            Parsing...
-          </>
-        ) : (
-          <>
-            <Brain className="w-5 h-5 mr-2" />
-            Parse Content
-          </>
-        )}
-      </button>
-
-      {/* Results Preview */}
-      {parsedData && (
-        <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="font-semibold text-green-800">Parse Results</h3>
-            {confidenceScores && (
-              <span className="text-sm text-green-600">
-                Confidence: {confidenceScores.overall}%
-              </span>
-            )}
-          </div>
-          <p className="text-sm text-green-700">
-            Found {parsedData.length} modules with {
-              parsedData.reduce((sum, m) => sum + m.assignments.length, 0)
-            } assignments
-          </p>
-          <div className="mt-2 max-h-40 overflow-y-auto">
-            {parsedData.map((module, idx) => (
-              <div key={idx} className="mb-2">
-                <div className="font-medium text-sm">{module.title}</div>
-                <div className="text-xs text-gray-600">
-                  {module.assignments.length} assignments
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Calendar View Component
-function CalendarView({ course, assignments = [], completedAssignments, onToggleAssignment, onUpdateAssignment, allCourses = [], showAllCourses = true }) {
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [currentView, setCurrentView] = useState('month');
-  const [studyBlocks, setStudyBlocks] = useState([]);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [preferences, setPreferences] = useState({
-    dailyMax: 4,
-    weekendMax: 6,
-    blockDuration: 1.5,
-    bufferDays: 3,
-    difficultyMultiplier: 1.2,
-    energyLevel: 'medium'
-  });
-  const [showEventModal, setShowEventModal] = useState(false);
-  const [selectedEvent, setSelectedEvent] = useState(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editData, setEditData] = useState({});
-  const [manualEvents, setManualEvents] = useState([]);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [showReschedulePrompt, setShowReschedulePrompt] = useState(false);
-  const [viewMode, setViewMode] = useState(showAllCourses ? 'all' : 'single');
-  const [newEvent, setNewEvent] = useState({
-    title: '',
-    date: new Date().toISOString().split('T')[0],
-    type: 'event',
-    hours: 1,
-    description: '',
-    time: '09:00',
-    needsStudyTime: false,
-    courseCode: course?.code || ''
-  });
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  // Get all assignments from all courses if in 'all' view mode
-  const allAssignments = useMemo(() => {
-    if (viewMode === 'all' && allCourses.length > 0) {
-      return allCourses.flatMap(c =>
-        c.assignments.map(a => ({ ...a, courseCode: c.code, courseName: c.name }))
-      );
-    }
-    return assignments.map(a => ({ ...a, courseCode: course.code, courseName: course.name }));
-  }, [viewMode, allCourses, assignments, course]);
+  // Delay utility
+  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
   // Extract events from assignments
   const extractedEvents = useMemo(() => {
@@ -897,6 +968,181 @@ function CalendarView({ course, assignments = [], completedAssignments, onToggle
               ))}
             </div>
           ))}
+        </div>
+      </div>
+    );
+  };
+
+  // Parse Modal Component
+  const ParseModal = () => {
+    if (!showParseModal) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+          <div className="p-6">
+            <div className="flex justify-between items-start mb-6">
+              <h3 className="text-xl font-semibold flex items-center gap-2">
+                <Brain className="w-5 h-5 text-blue-600" />
+                Smart Content Parser
+              </h3>
+              <button
+                onClick={() => setShowParseModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Parse Method Selection */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Parsing Method
+              </label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setIsParsingMode('hybrid')}
+                  className={`px-4 py-2 rounded ${isParsingMode === 'hybrid' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
+                >
+                  Hybrid (Recommended)
+                </button>
+                <button
+                  onClick={() => setIsParsingMode('ai')}
+                  className={`px-4 py-2 rounded ${isParsingMode === 'ai' ? 'bg-blue-600 text-white' : 'bg-gray-200'} ${!apiKey ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  disabled={!apiKey}
+                >
+                  AI Only {!apiKey && '(No API Key)'}
+                </button>
+                <button
+                  onClick={() => setIsParsingMode('regex')}
+                  className={`px-4 py-2 rounded ${isParsingMode === 'regex' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
+                >
+                  Pattern Only
+                </button>
+              </div>
+            </div>
+
+            {/* Document Type Selection */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Document Type
+              </label>
+              <select
+                value={docType}
+                onChange={(e) => setDocType(e.target.value)}
+                className="w-full p-2 border rounded"
+              >
+                <option value="mixed">Auto-Detect</option>
+                <option value="canvas-modules">Canvas Modules Page</option>
+                <option value="canvas-assignments">Canvas Assignments Page</option>
+                <option value="syllabus">Course Syllabus</option>
+                <option value="schedule">Course Schedule/Outline</option>
+              </select>
+            </div>
+
+            {/* Content Input */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Paste Course Content
+              </label>
+              <textarea
+                value={parseContent}
+                onChange={(e) => setParseContent(e.target.value)}
+                placeholder="Paste your Canvas page, syllabus, or course schedule here..."
+                className="w-full h-64 p-3 border rounded-lg resize-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* Progress Display */}
+            {isParsingContent && parseProgress && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded flex items-center">
+                <RefreshCw className="w-5 h-5 text-blue-600 mr-2 animate-spin" />
+                <span className="text-sm text-blue-800">{parseProgress}</span>
+              </div>
+            )}
+
+            {/* Error Display */}
+            {parseError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded flex items-start">
+                <AlertCircle className="w-5 h-5 text-red-600 mr-2 mt-0.5" />
+                <span className="text-sm text-red-800">{parseError}</span>
+              </div>
+            )}
+
+            {/* Parse Button */}
+            <button
+              onClick={handleParseContent}
+              disabled={isParsingContent || (!apiKey && isParsingMode !== 'regex')}
+              className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 flex items-center justify-center mb-4"
+            >
+              {isParsingContent ? (
+                <>
+                  <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
+                  Parsing...
+                </>
+              ) : (
+                <>
+                  <Brain className="w-5 h-5 mr-2" />
+                  Parse Content
+                </>
+              )}
+            </button>
+
+            {/* Results Preview */}
+            {parseResults && (
+              <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-semibold text-green-800">Parse Results</h3>
+                  <span className="text-sm text-green-600">
+                    Confidence: {parseResults.confidence}%
+                  </span>
+                </div>
+                <p className="text-sm text-green-700 mb-3">
+                  Found {parseResults.modules.length} modules with {parseResults.totalAssignments} assignments
+                </p>
+                <div className="max-h-40 overflow-y-auto space-y-2">
+                  {parseResults.modules.map((module, idx) => (
+                    <div key={idx} className="bg-white p-2 rounded border">
+                      <div className="font-medium text-sm">{module.title}</div>
+                      <div className="text-xs text-gray-600 mb-1">
+                        {module.assignments.length} assignments
+                      </div>
+                      {module.assignments.slice(0, 3).map((assignment, aIdx) => (
+                        <div key={aIdx} className="text-xs text-gray-500 ml-2">
+                          • {assignment.text.substring(0, 50)}...
+                          {assignment.aiEnhanced && <span className="text-blue-500"> (AI Enhanced)</span>}
+                        </div>
+                      ))}
+                      {module.assignments.length > 3 && (
+                        <div className="text-xs text-gray-400 ml-2">
+                          ... and {module.assignments.length - 3} more
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="flex gap-3 mt-4">
+                  <button
+                    onClick={() => {
+                      // Add parsed assignments to the course
+                      console.log('Adding parsed assignments:', parseResults);
+                      setShowParseModal(false);
+                    }}
+                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                  >
+                    Add to Course
+                  </button>
+                  <button
+                    onClick={() => setParseResults(null)}
+                    className="px-4 py-2 border rounded hover:bg-gray-50"
+                  >
+                    Clear Results
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -1466,6 +1712,13 @@ function CalendarView({ course, assignments = [], completedAssignments, onToggle
           </h3>
           <div className="flex gap-2">
             <button
+              onClick={() => setShowParseModal(true)}
+              className="px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 flex items-center gap-2"
+            >
+              <Upload className="w-4 h-4" />
+              <span>Parse Content</span>
+            </button>
+            <button
               onClick={() => setViewMode(viewMode === 'all' ? 'single' : 'all')}
               className={`px-3 py-2 rounded flex items-center gap-2 ${viewMode === 'all'
                 ? 'bg-purple-600 text-white'
@@ -1640,6 +1893,9 @@ function CalendarView({ course, assignments = [], completedAssignments, onToggle
           {currentView === 'week' && <WeekView />}
         </div>
       </div>
+
+      {/* Parse Modal */}
+      <ParseModal />
 
       {/* Event Modals */}
       <EventModal />

@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { X, AlertCircle, ChevronRight } from 'lucide-react';
 import Logo from '../Logo/Logo';
-import StudioraDualParser from './StudioraDualParser';
+import { StudiorAIService } from '../../services/StudiorAIService';
 
 function ParserModal({ courses, onClose, onComplete }) {
   const [step, setStep] = useState(1); // 1: Parse, 2: Assign to Course
