@@ -1,25 +1,15 @@
 // src/components/Course/CourseModal.jsx - Fixed Color Theme
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
+import { ChromePicker } from 'react-color'
 
 function CourseModal({ onClose, onSave, course = null }) {
   const [formData, setFormData] = useState({
     name: course?.name || '',
     code: course?.code || '',
-    color: course?.color || 'blue',
+    color: course?.color || '#2563eb',
     description: course?.description || ''
   });
-
-  const colors = [
-    { name: 'Blue', value: 'blue', hex: '#2563eb' },
-    { name: 'Green', value: 'green', hex: '#16a34a' },
-    { name: 'Purple', value: 'purple', hex: '#9333ea' },
-    { name: 'Orange', value: 'orange', hex: '#f97316' },
-    { name: 'Red', value: 'red', hex: '#dc2626' },
-    { name: 'Pink', value: 'pink', hex: '#ec4899' },
-    { name: 'Indigo', value: 'indigo', hex: '#6366f1' },
-    { name: 'Yellow', value: 'yellow', hex: '#eab308' }
-  ];
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -30,7 +20,7 @@ function CourseModal({ onClose, onSave, course = null }) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full">
         <div className="p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold">
@@ -90,22 +80,11 @@ function CourseModal({ onClose, onSave, course = null }) {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Color Theme
               </label>
-              <div className="grid grid-cols-4 gap-2">
-                {colors.map((color) => (
-                  <button
-                    key={color.value}
-                    type="button"
-                    onClick={() => setFormData({ ...formData, color: color.value })}
-                    className={`h-10 rounded-lg transition-all ${
-                      formData.color === color.value
-                        ? 'ring-2 ring-offset-2 ring-gray-400 scale-110'
-                        : 'hover:scale-105'
-                    }`}
-                    style={{ backgroundColor: color.hex }}
-                    title={color.name}
-                  />
-                ))}
-              </div>
+              <ChromePicker
+                color={formData.color}
+                onChange={(color) => setFormData({ ...formData, color: color.hex })}
+                disableAlpha
+              />
             </div>
 
             <div className="flex gap-3 pt-4">
