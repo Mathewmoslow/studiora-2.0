@@ -22,6 +22,14 @@ export class StudioraDualParser {
       'schedule': new ScheduleParser(),
       'mixed': this.regexParser // Use generic parser for mixed/unknown content
     };
+
+    // Token limits for different models
+    this.tokenLimits = {
+      'gpt-4': 128000, // Defaults to gpt-4-turbo in API
+      'gpt-4-turbo': 128000,
+      'gpt-4o': 128000,
+      'gpt-3.5-turbo': 16000
+    };
   }
 
   // Enhanced document type detection for Canvas content
@@ -109,7 +117,6 @@ export class StudioraDualParser {
           course, 
           detectedType
         );
-        // FIXED: Add safety check for validatedAssignments
         console.log('✨ AI enhanced', enhancedRegexResults.validatedAssignments?.length || 0, 'assignments');
       }
       
@@ -223,7 +230,8 @@ export class StudioraDualParser {
         course: regexResults.assignments[0]?.course || 'unknown'
       };
 
-      const aiRemainderResults = await this.aiService.parseRemainder(remainingText, context);
+      // Use the new AI service method for additional assignments
+      const aiRemainderResults = await this.aiService.findAdditionalAssignments(remainingText, regexResults.assignments);
       
       return {
         assignments: (aiRemainderResults.assignments || []).map((assignment, idx) => ({
@@ -249,7 +257,8 @@ export class StudioraDualParser {
         course: course
       };
 
-      const aiValidation = await this.aiService.validateAssignments(validationRequest);
+      // Use the new AI service method for enhancement
+      const aiValidation = await this.aiService.enhanceRegexResults(regexResults.assignments, text);
       
       return {
         ...regexResults,
