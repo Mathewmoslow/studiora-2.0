@@ -1,10 +1,9 @@
-/* src/index.css - Global Styles for Studiora 2.0 */
+/* src/index.css - Complete Global Styles for Studiora 2.0 */
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Import Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-/* If not using Tailwind, use these base styles: */
+/* Reset and Base Styles */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -13,7 +12,7 @@
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -27,44 +26,315 @@ code {
     monospace;
 }
 
-/* Custom scrollbar */
+/* Studiora-specific styles */
+.studiora-gradient {
+  background: linear-gradient(135deg, #2196F3 0%, #9C27B0 100%);
+}
+
+.studiora-text-gradient {
+  background: linear-gradient(135deg, #2196F3 0%, #4F46E5 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Animation for parsing status */
+@keyframes pulse-subtle {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+.parsing-pulse {
+  animation: pulse-subtle 2s infinite;
+}
+
+/* Custom scrollbar for better UX */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
 }
 
 ::-webkit-scrollbar-track {
   background: #f1f1f1;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 4px;
+  background: #c1c1c1;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: #a8a8a8;
 }
 
-/* Utility classes if not using Tailwind */
-.min-h-screen {
-  min-height: 100vh;
+/* Dark mode scrollbar (optional - remove if not using dark mode) */
+.dark ::-webkit-scrollbar {
+  width: 8px;
 }
 
-.bg-gray-50 {
-  background-color: #f9fafb;
+.dark ::-webkit-scrollbar-track {
+  background: #1f2937;
 }
 
-.text-blue-600 {
-  color: #2563eb;
+.dark ::-webkit-scrollbar-thumb {
+  background: #4b5563;
+  border-radius: 4px;
 }
 
-.bg-blue-600 {
-  background-color: #2563eb;
+/* Event item styles */
+.event-item {
+  padding: 10px;
+  border-bottom: 1px solid #eee;
 }
 
-.hover\:bg-blue-700:hover {
-  background-color: #1d4ed8;
+.event-item:hover {
+  background: #f9f9f9;
 }
 
-/* Add more utility classes as needed */
+/* React Big Calendar Custom Styles for Studiora */
+.studiora-calendar .rbc-calendar {
+  font-family: inherit;
+}
+
+.studiora-calendar .rbc-month-view,
+.studiora-calendar .rbc-time-view,
+.studiora-calendar .rbc-agenda-view {
+  border: none;
+  background: transparent;
+}
+
+.studiora-calendar .rbc-header {
+  padding: 8px;
+  font-weight: 600;
+  border-bottom: 2px solid #e5e7eb;
+  background: transparent;
+}
+
+.dark .studiora-calendar .rbc-header {
+  border-bottom-color: #374151;
+  color: #d1d5db;
+}
+
+.studiora-calendar .rbc-month-row {
+  border: none;
+}
+
+.studiora-calendar .rbc-day-bg {
+  border-left: 1px solid #e5e7eb;
+}
+
+.dark .studiora-calendar .rbc-day-bg {
+  border-left-color: #374151;
+}
+
+.studiora-calendar .rbc-off-range-bg {
+  background: #f9fafb;
+}
+
+.dark .studiora-calendar .rbc-off-range-bg {
+  background: #111827;
+}
+
+.studiora-calendar .rbc-today {
+  background-color: #eff6ff;
+}
+
+.dark .studiora-calendar .rbc-today {
+  background-color: #1e3a8a20;
+}
+
+.studiora-calendar .rbc-event {
+  padding: 2px 8px;
+  font-size: 0.875rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.studiora-calendar .rbc-event:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+}
+
+.studiora-calendar .rbc-event:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 1px;
+}
+
+.studiora-calendar .rbc-event-label {
+  display: none;
+}
+
+.studiora-calendar .rbc-selected {
+  background-color: #3b82f6 !important;
+}
+
+.studiora-calendar .rbc-show-more {
+  background-color: #e5e7eb;
+  color: #374151;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  margin: 2px;
+}
+
+.dark .studiora-calendar .rbc-show-more {
+  background-color: #374151;
+  color: #d1d5db;
+}
+
+.studiora-calendar .rbc-toolbar {
+  display: none; /* We're using our custom toolbar */
+}
+
+.studiora-calendar .rbc-date-cell {
+  padding: 4px;
+  text-align: right;
+}
+
+.dark .studiora-calendar .rbc-date-cell {
+  color: #d1d5db;
+}
+
+.studiora-calendar .rbc-date-cell.rbc-off-range {
+  color: #9ca3af;
+}
+
+.dark .studiora-calendar .rbc-date-cell.rbc-off-range {
+  color: #4b5563;
+}
+
+/* Agenda View Styles */
+.studiora-calendar .rbc-agenda-view table {
+  border: none;
+}
+
+.studiora-calendar .rbc-agenda-view table thead > tr > th {
+  border-bottom: 2px solid #e5e7eb;
+  padding: 8px;
+  text-align: left;
+  font-weight: 600;
+}
+
+.dark .studiora-calendar .rbc-agenda-view table thead > tr > th {
+  border-bottom-color: #374151;
+  color: #d1d5db;
+}
+
+.studiora-calendar .rbc-agenda-date-cell,
+.studiora-calendar .rbc-agenda-time-cell {
+  white-space: nowrap;
+  padding: 8px;
+}
+
+.dark .studiora-calendar .rbc-agenda-date-cell,
+.dark .studiora-calendar .rbc-agenda-time-cell {
+  color: #d1d5db;
+}
+
+.studiora-calendar .rbc-agenda-event-cell {
+  padding: 8px;
+}
+
+/* Week View Styles */
+.studiora-calendar .rbc-time-view {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.dark .studiora-calendar .rbc-time-view {
+  border-color: #374151;
+}
+
+.studiora-calendar .rbc-time-header {
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.dark .studiora-calendar .rbc-time-header {
+  border-bottom-color: #374151;
+}
+
+.studiora-calendar .rbc-time-content {
+  border-top: none;
+}
+
+.studiora-calendar .rbc-timeslot-group {
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.dark .studiora-calendar .rbc-timeslot-group {
+  border-bottom-color: #1f2937;
+}
+
+.studiora-calendar .rbc-current-time-indicator {
+  background-color: #ef4444;
+  height: 2px;
+}
+
+/* Completed Assignment Styles */
+.studiora-calendar .rbc-event.completed {
+  opacity: 0.6;
+  text-decoration: line-through;
+  background-color: #9ca3af !important;
+}
+
+/* Overdue Assignment Styles */
+.studiora-calendar .rbc-event.overdue {
+  background-color: #dc2626 !important;
+  font-weight: bold;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+  .studiora-calendar .rbc-toolbar {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .studiora-calendar .rbc-toolbar-label {
+    order: -1;
+    width: 100%;
+    text-align: center;
+    font-size: 1.125rem;
+  }
+  
+  .studiora-calendar .rbc-event {
+    font-size: 0.75rem;
+    padding: 1px 4px;
+  }
+  
+  .studiora-calendar .rbc-date-cell {
+    font-size: 0.875rem;
+  }
+}
+
+/* Calendar Height Adjustments */
+.studiora-calendar {
+  height: calc(100vh - 300px);
+  min-height: 500px;
+}
+
+@media (max-width: 768px) {
+  .studiora-calendar {
+    height: calc(100vh - 400px);
+    min-height: 400px;
+  }
+}

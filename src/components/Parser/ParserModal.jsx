@@ -1,6 +1,7 @@
-// src/components/Parser/ParserModal.jsx - FINAL VERSION
+// src/components/Parser/ParserModal.jsx - Updated without Brain icons
 import React, { useState } from 'react';
 import { X, AlertCircle, ChevronRight } from 'lucide-react';
+import Logo from '../Logo/Logo';
 import StudioraDualParser from './StudioraDualParser';
 
 function ParserModal({ courses, onClose, onComplete }) {
@@ -53,7 +54,8 @@ function ParserModal({ courses, onClose, onComplete }) {
         <div className="p-6 border-b">
           <div className="flex justify-between items-center">
             <div>
-              <h2 className="text-xl font-semibold">
+              <h2 className="text-xl font-semibold flex items-center gap-2">
+                <Logo className="h-6 w-6" />
                 {step === 1 ? 'Import Course Assignments' : 'Assign to Course'}
               </h2>
               <p className="text-sm text-gray-600 mt-1">

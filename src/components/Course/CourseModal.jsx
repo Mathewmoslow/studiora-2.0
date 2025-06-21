@@ -1,4 +1,4 @@
-// src/components/Course/CourseModal.jsx - FINAL VERSION
+// src/components/Course/CourseModal.jsx - Fixed Color Theme
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
 
@@ -11,14 +11,14 @@ function CourseModal({ onClose, onSave, course = null }) {
   });
 
   const colors = [
-    { name: 'Blue', value: 'blue', class: 'bg-blue-500' },
-    { name: 'Green', value: 'green', class: 'bg-green-500' },
-    { name: 'Purple', value: 'purple', class: 'bg-purple-500' },
-    { name: 'Orange', value: 'orange', class: 'bg-orange-500' },
-    { name: 'Red', value: 'red', class: 'bg-red-500' },
-    { name: 'Pink', value: 'pink', class: 'bg-pink-500' },
-    { name: 'Indigo', value: 'indigo', class: 'bg-indigo-500' },
-    { name: 'Yellow', value: 'yellow', class: 'bg-yellow-500' }
+    { name: 'Blue', value: 'blue', hex: '#2563eb' },
+    { name: 'Green', value: 'green', hex: '#16a34a' },
+    { name: 'Purple', value: 'purple', hex: '#9333ea' },
+    { name: 'Orange', value: 'orange', hex: '#f97316' },
+    { name: 'Red', value: 'red', hex: '#dc2626' },
+    { name: 'Pink', value: 'pink', hex: '#ec4899' },
+    { name: 'Indigo', value: 'indigo', hex: '#6366f1' },
+    { name: 'Yellow', value: 'yellow', hex: '#eab308' }
   ];
 
   const handleSubmit = (e) => {
@@ -96,11 +96,12 @@ function CourseModal({ onClose, onSave, course = null }) {
                     key={color.value}
                     type="button"
                     onClick={() => setFormData({ ...formData, color: color.value })}
-                    className={`${color.class} h-10 rounded-lg transition-all ${
+                    className={`h-10 rounded-lg transition-all ${
                       formData.color === color.value
                         ? 'ring-2 ring-offset-2 ring-gray-400 scale-110'
                         : 'hover:scale-105'
                     }`}
+                    style={{ backgroundColor: color.hex }}
                     title={color.name}
                   />
                 ))}

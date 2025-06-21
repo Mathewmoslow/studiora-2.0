@@ -1,6 +1,6 @@
-// src/components/Parser/StudioraDualParser.jsx - FINAL VERSION
+// src/components/Parser/StudioraDualParser.jsx - Updated without Brain icon
 import React, { useState } from 'react';
-import { Brain, RefreshCw, AlertCircle } from 'lucide-react';
+import { RefreshCw, AlertCircle, Sparkles } from 'lucide-react';
 
 function StudioraDualParser({ onParsed, onError }) {
   const [content, setContent] = useState('');
@@ -147,7 +147,7 @@ function StudioraDualParser({ onParsed, onError }) {
           </>
         ) : (
           <>
-            <Brain className="w-5 h-5 mr-2" />
+            <Sparkles className="w-5 h-5 mr-2" />
             Parse Content
           </>
         )}

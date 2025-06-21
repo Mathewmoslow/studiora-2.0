@@ -1,15 +1,16 @@
-// src/components/Dashboard/WelcomeScreen.jsx - FINAL VERSION
+// src/components/Dashboard/WelcomeScreen.jsx
 import React from 'react';
-import { Brain, Plus, Upload, Calendar, Clock } from 'lucide-react';
+import { Plus, Upload, Calendar, Clock } from 'lucide-react';
+import Logo from '../Logo/Logo';
 
 function WelcomeScreen({ onCreateCourse }) {
   return (
     <div className="min-h-[600px] flex items-center justify-center">
       <div className="text-center max-w-2xl mx-auto px-4">
         <div className="mb-8">
-          <Brain className="h-20 w-20 text-blue-600 mx-auto mb-4" />
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            Welcome to Studiora
+          <Logo className="h-20 w-20 mx-auto mb-4" />
+          <h1 className="text-4xl font-bold mb-2">
+            <span className="studiora-text-gradient">Welcome to Studiora</span>
           </h1>
           <p className="text-xl text-gray-600">
             Your intelligent study planner that adapts to your schedule
@@ -53,7 +54,7 @@ function WelcomeScreen({ onCreateCourse }) {
 
           <button
             onClick={onCreateCourse}
-            className="mt-8 bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 mx-auto text-lg font-medium"
+            className="mt-8 studiora-gradient text-white px-8 py-3 rounded-lg hover:opacity-90 transition-opacity flex items-center space-x-2 mx-auto text-lg font-medium"
           >
             <Plus className="h-5 w-5" />
             <span>Create Your First Course</span>
@@ -67,7 +68,9 @@ function WelcomeScreen({ onCreateCourse }) {
             <p className="text-sm text-gray-600">Automatically schedules study time based on assignment complexity</p>
           </div>
           <div className="bg-white rounded-lg p-4 border border-gray-200">
-            <Brain className="h-8 w-8 text-blue-500 mx-auto mb-2" />
+            <div className="h-8 w-8 studiora-gradient rounded-lg mx-auto mb-2 flex items-center justify-center">
+              <span className="text-white font-bold">AI</span>
+            </div>
             <h3 className="font-medium">AI-Powered Parsing</h3>
             <p className="text-sm text-gray-600">Extracts assignments from any course material format</p>
           </div>

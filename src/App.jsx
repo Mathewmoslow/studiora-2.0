@@ -1,6 +1,7 @@
-// src/App.jsx - FINAL VERSION - Clean Shell
+// src/App.jsx - Updated with Logo everywhere
 import React, { useState, useEffect } from 'react';
-import { Brain, Upload, Plus } from 'lucide-react';
+import { Upload, Plus } from 'lucide-react';
+import Logo from './components/Logo/Logo';
 import Dashboard from './components/Dashboard/Dashboard';
 import CalendarView from './components/Calendar/CalendarView';
 import ParserModal from './components/Parser/ParserModal';
@@ -169,8 +170,8 @@ function StudioraNursingPlanner() {
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-3">
               <div className="flex items-center space-x-2">
-                <Brain className="h-8 w-8 text-blue-600" />
-                <h1 className="text-xl font-bold">Studiora</h1>
+                <Logo className="h-8 w-8" />
+                <h1 className="text-xl font-bold studiora-text-gradient">Studiora</h1>
               </div>
               <span className="text-sm text-gray-500">Dynamic Study Planner</span>
             </div>
