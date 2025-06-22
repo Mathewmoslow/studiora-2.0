@@ -1,34 +1,83 @@
-// src/components/Parser/ParserModal.jsx - Updated without Brain icons
+// src/components/Parser/ParserModal.jsx
+// Simplified to use new sequential parser
+
 import React, { useState } from 'react';
-import { X, AlertCircle, ChevronRight } from 'lucide-react';
+import { X, AlertCircle, Brain, Loader } from 'lucide-react';
 import Logo from '../Logo/Logo';
-import { StudiorAIService } from '../../services/StudiorAIService';
+import { StudioraDualParser } from '../../services/StudioraDualParser';
 
 function ParserModal({ courses, onClose, onComplete }) {
   const [step, setStep] = useState(1); // 1: Parse, 2: Assign to Course
   const [parsedAssignments, setParsedAssignments] = useState([]);
   const [selectedCourse, setSelectedCourse] = useState(courses[0]?.id || '');
+  
+  // Parsing state
+  const [inputText, setInputText] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [progress, setProgress] = useState([]);
+  const [error, setError] = useState(null);
+  
+  // Get API key from environment variables
+  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
 
-  const handleParsed = (results) => {
-    // Flatten all assignments from modules
-    const allAssignments = [];
-    results.forEach((module, moduleIndex) => {
-      module.assignments.forEach((assignment, assignmentIndex) => {
-        allAssignments.push({
-          ...assignment,
-          id: `parsed_${Date.now()}_${moduleIndex}_${assignmentIndex}`,
-          moduleWeek: module.week,
-          moduleTitle: module.title
-        });
+  const handleParse = async () => {
+    if (!inputText.trim()) {
+      setError('Please enter some content to parse');
+      return;
+    }
+
+    setIsLoading(true);
+    setProgress([]);
+    setError(null);
+
+    try {
+      setProgress([{ stage: 'starting', message: 'Initializing parser...' }]);
+
+      const parser = new StudioraDualParser(apiKey);
+      const selectedCourseData = courses.find(c => c.id === selectedCourse);
+      
+      const results = await parser.parse(inputText, {
+        course: selectedCourseData?.code || 'unknown'
+      }, (progressUpdate) => {
+        setProgress(prev => [...prev, {
+          stage: progressUpdate.stage,
+          message: progressUpdate.message,
+          timestamp: new Date().toLocaleTimeString()
+        }]);
       });
-    });
-    
-    setParsedAssignments(allAssignments);
-    setStep(2);
-  };
 
-  const handleError = (error) => {
-    console.error('Parse error:', error);
+      const assignments = results.assignments || [];
+      
+      if (assignments.length > 0) {
+        const formattedAssignments = assignments.map((assignment, index) => ({
+          ...assignment,
+          id: assignment.id || `parsed_${Date.now()}_${index}`,
+          moduleWeek: assignment.moduleWeek || null,
+          moduleTitle: assignment.moduleTitle || null
+        }));
+        
+        setParsedAssignments(formattedAssignments);
+        setProgress(prev => [...prev, { 
+          stage: 'complete', 
+          message: `Successfully found ${formattedAssignments.length} assignments!`
+        }]);
+        setStep(2);
+      } else {
+        setProgress(prev => [...prev, { 
+          stage: 'complete', 
+          message: 'No assignments found in the provided text.' 
+        }]);
+      }
+
+    } catch (err) {
+      setError(err.message);
+      setProgress(prev => [...prev, { 
+        stage: 'error', 
+        message: `❌ Parsing failed: ${err.message}` 
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleAssignToCourse = () => {
@@ -60,7 +109,7 @@ function ParserModal({ courses, onClose, onComplete }) {
               </h2>
               <p className="text-sm text-gray-600 mt-1">
                 {step === 1 
-                  ? 'Paste your syllabus, Canvas page, or course schedule' 
+                  ? 'Paste your syllabus, course page, or assignment list' 
                   : `${parsedAssignments.length} assignments found - Select a course`}
               </p>
             </div>
@@ -71,12 +120,112 @@ function ParserModal({ courses, onClose, onComplete }) {
         </div>
 
         {/* Content */}
-        <div className="p-6">
+        <div className="p-6 max-h-[60vh] overflow-y-auto">
           {step === 1 ? (
-            <StudioraDualParser 
-              onParsed={handleParsed}
-              onError={handleError}
-            />
+            <div className="space-y-4">
+              {/* Course Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Target Course
+                </label>
+                <select
+                  value={selectedCourse}
+                  onChange={(e) => setSelectedCourse(e.target.value)}
+                  className="w-full p-3 border border-gray-300 rounded-lg"
+                  disabled={isLoading}
+                >
+                  {courses.map(course => (
+                    <option key={course.id} value={course.id}>
+                      {course.code} - {course.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Content Input */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Course Content
+                </label>
+                <textarea
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  placeholder="Paste your syllabus, course page, or assignment list here..."
+                  className="w-full h-64 p-3 border border-gray-300 rounded-lg resize-none"
+                  disabled={isLoading}
+                />
+              </div>
+
+              {/* Progress Display */}
+              {progress.length > 0 && (
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h3 className="font-medium mb-2">Progress</h3>
+                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                    {progress.map((item, index) => (
+                      <div key={index} className="flex items-center gap-2 text-sm">
+                        {item.stage === 'error' ? (
+                          <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                        ) : isLoading && index === progress.length - 1 ? (
+                          <Loader className="w-4 h-4 animate-spin text-blue-500 flex-shrink-0" />
+                        ) : (
+                          <div className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
+                            <div className="w-2 h-2 bg-white rounded-full"></div>
+                          </div>
+                        )}
+                        <span className={item.stage === 'error' ? 'text-red-600' : ''}>
+                          {item.message}
+                        </span>
+                        {item.timestamp && (
+                          <span className="text-xs text-gray-400 ml-auto">
+                            {item.timestamp}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Error Display */}
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-red-500" />
+                    <span className="font-medium text-red-800">Error</span>
+                  </div>
+                  <p className="text-red-700 mt-1">{error}</p>
+                </div>
+              )}
+
+              {/* API Key Warning */}
+              {!apiKey && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-yellow-600" />
+                    <span className="font-medium text-yellow-800">No API Key</span>
+                  </div>
+                  <p className="text-yellow-700 mt-1">
+                    Studiora enhancement will be skipped. Only regex parsing will be used.
+                  </p>
+                </div>
+              )}
+
+              {/* Parse Button */}
+              <div className="flex justify-end">
+                <button
+                  onClick={handleParse}
+                  disabled={!inputText.trim() || isLoading}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {isLoading ? (
+                    <Loader className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Brain className="w-4 h-4" />
+                  )}
+                  {isLoading ? 'Parsing...' : 'Parse Content'}
+                </button>
+              </div>
+            </div>
           ) : (
             <div className="space-y-6">
               {/* Course Selection */}
@@ -103,15 +252,13 @@ function ParserModal({ courses, onClose, onComplete }) {
                 <div className="max-h-64 overflow-y-auto border rounded-lg p-4 bg-gray-50">
                   <div className="space-y-2">
                     {parsedAssignments.map((assignment, index) => (
-                      <div key={assignment.id} className="flex items-start space-x-2 text-sm">
-                        <ChevronRight className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
-                        <div className="flex-1">
-                          <span className="font-medium">{assignment.text}</span>
-                          <div className="text-xs text-gray-500">
-                            {assignment.date && `Due: ${new Date(assignment.date).toLocaleDateString()}`}
-                            {assignment.type && ` • Type: ${assignment.type}`}
-                            {assignment.moduleTitle && ` • ${assignment.moduleTitle}`}
-                          </div>
+                      <div key={assignment.id} className="text-sm border-b border-gray-200 pb-2 last:border-0">
+                        <div className="font-medium">{assignment.text}</div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {assignment.date && `Due: ${new Date(assignment.date).toLocaleDateString()}`}
+                          {assignment.type && ` • Type: ${assignment.type}`}
+                          {assignment.hours && ` • ${assignment.hours}h`}
+                          {assignment.source && ` • Source: ${assignment.source}`}
                         </div>
                       </div>
                     ))}

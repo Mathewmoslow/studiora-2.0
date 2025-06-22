@@ -1,10 +1,10 @@
-// src/App.jsx - Updated with Logo everywhere
+// src/App.jsx - Updated import path only
 import React, { useState, useEffect } from 'react';
 import { Upload, Plus } from 'lucide-react';
 import Logo from './components/Logo/Logo';
 import Dashboard from './components/Dashboard/Dashboard';
 import CalendarView from './components/Calendar/CalendarView';
-import ParserModal from './components/Parser/ParserModal';
+import ParserModal from './components/Parser/ParserModal'; // Same component, updated internally
 import CourseModal from './components/Course/CourseModal';
 import WelcomeScreen from './components/Dashboard/WelcomeScreen';
 import { formatAssignmentForDisplay } from './utils/assignmentHelpers';
@@ -82,18 +82,14 @@ function StudioraNursingPlanner() {
     }
   };
 
-  // Handle parse complete - includes course assignment
+  // Handle parse complete - simplified with new parser
   const handleParseComplete = (results) => {
-    // If no courses exist, prompt to create one first
     if (courses.length === 0) {
       alert('Please create a course first before importing assignments.');
       setShowCourseModal(true);
       return;
     }
-
-    // Store results and show assignment mapping in parser modal
     setParsingResults(results);
-    // Parser modal will handle course assignment
   };
 
   // Add assignments to course
@@ -148,6 +144,18 @@ function StudioraNursingPlanner() {
       setSelectedCourse(null);
       localStorage.removeItem('studiora_data');
     }
+  };
+
+  // Handle course selection (null = all courses view)
+  const handleCourseSelect = (course) => {
+    setSelectedCourse(course);
+    setCurrentView('calendar');
+  };
+
+  // Handle back navigation from calendar
+  const handleBackToDashboard = () => {
+    setCurrentView('dashboard');
+    setSelectedCourse(null);
   };
 
   // Get all assignments across all courses
@@ -238,10 +246,7 @@ function StudioraNursingPlanner() {
             courses={courses}
             completedAssignments={completedAssignments}
             parsingResults={parsingResults}
-            onCourseSelect={(course) => {
-              setSelectedCourse(course);
-              setCurrentView('calendar');
-            }}
+            onCourseSelect={handleCourseSelect}
             onImport={() => setShowParser(true)}
             onCreateCourse={() => setShowCourseModal(true)}
             onUpdateCourse={handleUpdateCourse}
@@ -252,13 +257,14 @@ function StudioraNursingPlanner() {
         {/* Calendar View */}
         {currentView === 'calendar' && courses.length > 0 && (
           <CalendarView
-            course={selectedCourse || courses[0]}
+            course={selectedCourse}
             assignments={selectedCourse ? selectedCourse.assignments : allAssignments}
             allCourses={courses}
             showAllCourses={!selectedCourse}
             completedAssignments={completedAssignments}
             onToggleAssignment={toggleAssignment}
             onUpdateAssignment={updateAssignment}
+            onBack={handleBackToDashboard}
           />
         )}
       </div>
@@ -271,7 +277,7 @@ function StudioraNursingPlanner() {
         />
       )}
 
-      {/* Parser Modal */}
+      {/* Parser Modal - now uses simplified sequential parser */}
       {showParser && (
         <ParserModal 
           courses={courses}

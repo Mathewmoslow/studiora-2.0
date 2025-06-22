@@ -1,8 +1,9 @@
 // src/components/Dashboard/Dashboard.jsx - FINAL VERSION
-import React from 'react';
-import { BookOpen, Clock, AlertCircle, Target, Plus, Upload, Edit2, Trash2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { BookOpen, Clock, AlertCircle, Target } from 'lucide-react';
 import StatsCard from './StatsCard';
 import CourseCard from './CourseCard';
+import CourseModal from '../Course/CourseModal';
 
 function Dashboard({ 
   courses, 
@@ -14,6 +15,9 @@ function Dashboard({
   onUpdateCourse,
   onDeleteCourse 
 }) {
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingCourse, setEditingCourse] = useState(null);
+
   // Get all assignments across all courses
   const allAssignments = courses.flatMap(course => 
     course.assignments.map(a => ({ 
@@ -74,24 +78,15 @@ function Dashboard({
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold">Your Courses</h2>
-          <div className="flex gap-2">
+          {courses.length > 0 && (
             <button
-              onClick={onCreateCourse}
-              className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm flex items-center space-x-1 hover:bg-green-700"
+              onClick={() => onCourseSelect(null)} // null indicates all courses view
+              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2"
             >
-              <Plus size={16} />
-              <span>Add Course</span>
+              <BookOpen className="w-4 h-4" />
+              View All Courses Calendar
             </button>
-            {courses.length > 0 && (
-              <button
-                onClick={onImport}
-                className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm flex items-center space-x-1 hover:bg-blue-700"
-              >
-                <Upload size={16} />
-                <span>Import Assignments</span>
-              </button>
-            )}
-          </div>
+          )}
         </div>
 
         {courses.length === 0 ? (
@@ -113,7 +108,10 @@ function Dashboard({
                 course={course}
                 completedAssignments={completedAssignments}
                 onSelect={() => onCourseSelect(course)}
-                onEdit={() => onUpdateCourse(course.id, course)}
+                onEdit={() => {
+                  setEditingCourse(course);
+                  setShowEditModal(true);
+                }}
                 onDelete={() => onDeleteCourse(course.id)}
               />
             ))}
@@ -163,6 +161,22 @@ function Dashboard({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Edit Course Modal */}
+      {showEditModal && (
+        <CourseModal
+          course={editingCourse}
+          onClose={() => {
+            setShowEditModal(false);
+            setEditingCourse(null);
+          }}
+          onSave={(updatedData) => {
+            onUpdateCourse(editingCourse.id, updatedData);
+            setShowEditModal(false);
+            setEditingCourse(null);
+          }}
+        />
       )}
     </div>
   );
