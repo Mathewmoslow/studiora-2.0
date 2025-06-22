@@ -1,10 +1,9 @@
-// src/components/Calendar/CalendarView.jsx - Fixed view handling
+// src/components/Calendar/CalendarView.jsx - Removed import button and ParserModal
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Settings, Zap, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Settings, Zap, ArrowLeft } from 'lucide-react';
 import BigCalendarView from './CalendarViews';
 import CalendarStats from './CalendarStats';
 import { EventModal, AddEventModal, SettingsModal } from './EventModals';
-import ParserModal from '../Parser/ParserModal';
 
 function CalendarView({ 
   course, 
@@ -17,7 +16,7 @@ function CalendarView({
   onBack 
 }) {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [currentView, setCurrentView] = useState('month'); // FIXED: Add view state
+  const [currentView, setCurrentView] = useState('month');
   const [studyBlocks, setStudyBlocks] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [preferences, setPreferences] = useState({
@@ -37,31 +36,21 @@ function CalendarView({
   const [manualEvents, setManualEvents] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [showParseModal, setShowParseModal] = useState(false);
-  const [showReschedulePrompt, setShowReschedulePrompt] = useState(false);
   
   const today = new Date();
   const viewMode = showAllCourses ? 'all' : 'course';
 
+  // Debug: Log assignments to console
+  useEffect(() => {
+    console.log('📅 CalendarView received assignments:', assignments);
+    console.log('📊 Assignment count:', assignments.length);
+    console.log('🎓 Course:', course);
+    console.log('🔍 View mode:', viewMode);
+  }, [assignments, course, viewMode]);
+
   // Navigation functions for Big Calendar
   const handleNavigate = (newDate) => {
-    setCurrentDate(newDate);
-  };
-
-  // FIXED: Add view change handler
-  const handleViewChange = (newView) => {
-    setCurrentView(newView);
-  };
-
-  const navigateMonth = (direction) => {
-    const newDate = new Date(currentDate);
-    newDate.setMonth(currentDate.getMonth() + direction);
-    setCurrentDate(newDate);
-  };
-
-  const navigateWeek = (direction) => {
-    const newDate = new Date(currentDate);
-    newDate.setDate(currentDate.getDate() + (direction * 7));
+    console.log('📅 Navigating to:', newDate);
     setCurrentDate(newDate);
   };
 
@@ -72,6 +61,8 @@ function CalendarView({
       const upcomingAssignments = assignments.filter(a => 
         new Date(a.date) > today && !completedAssignments?.has?.(a.id)
       );
+
+      console.log('📚 Generating study schedule for', upcomingAssignments.length, 'assignments');
 
       const newStudyBlocks = [];
       upcomingAssignments.forEach(assignment => {
@@ -91,12 +82,13 @@ function CalendarView({
             type: 'study',
             hours: Math.min(preferences.blockDuration, studyHours - (i * preferences.blockDuration)),
             source: 'generated',
-            courseCode: course.code,
+            courseCode: course?.code || assignment.courseCode,
             assignmentId: assignment.id
           });
         }
       });
 
+      console.log('📊 Generated', newStudyBlocks.length, 'study blocks');
       setStudyBlocks(newStudyBlocks);
     } finally {
       setIsGenerating(false);
@@ -105,6 +97,7 @@ function CalendarView({
 
   // Event handlers
   const handleEventClick = (event) => {
+    console.log('🖱️ Event clicked:', event);
     setSelectedEvent(event);
     setEditData(event);
     setShowEventModal(true);
@@ -140,8 +133,8 @@ function CalendarView({
       id: `manual_${Date.now()}`,
       date: new Date(newEvent.date),
       source: 'manual',
-      courseCode: newEvent.courseCode || course.code,
-      courseName: allCourses.find(c => c.code === newEvent.courseCode)?.name || course.name
+      courseCode: newEvent.courseCode || course?.code,
+      courseName: allCourses.find(c => c.code === newEvent.courseCode)?.name || course?.name
     };
 
     setManualEvents(prev => [...prev, event]);
@@ -151,10 +144,6 @@ function CalendarView({
     }
 
     setShowAddModal(false);
-  };
-
-  const isToday = (date) => {
-    return date.toDateString() === today.toDateString();
   };
 
   return (
@@ -172,18 +161,14 @@ function CalendarView({
             </button>
           )}
           <h1 className="text-2xl font-bold">
-            {showAllCourses ? 'All Courses Calendar' : `${course.code} Calendar`}
+            {showAllCourses ? 'All Courses Calendar' : `${course?.code || 'Course'} Calendar`}
           </h1>
+          <span className="text-sm text-gray-500">
+            {assignments.length} assignments
+          </span>
         </div>
         
         <div className="flex gap-2">
-          <button
-            onClick={() => setShowParseModal(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Import
-          </button>
           <button
             onClick={() => setShowSettingsModal(true)}
             className="p-2 border rounded-lg hover:bg-gray-50"
@@ -201,22 +186,19 @@ function CalendarView({
         completedAssignments={completedAssignments}
       />
 
-      {/* Calendar */}
-      <div className="bg-white rounded-lg shadow overflow-hidden flex-1 flex flex-col">
-        <div className="flex-1 overflow-hidden">
-          <BigCalendarView
-            currentDate={currentDate}
-            assignments={assignments}
-            studyBlocks={studyBlocks}
-            manualEvents={manualEvents}
-            course={course}
-            viewMode={viewMode}
-            currentView={currentView}
-            onEventClick={handleEventClick}
-            onNavigate={handleNavigate}
-            onViewChange={handleViewChange} // FIXED: Pass view change handler
-          />
-        </div>
+      {/* Calendar Container with proper height */}
+      <div className="bg-white rounded-lg shadow overflow-hidden flex-1 min-h-[600px] studiora-calendar">
+        <BigCalendarView
+          currentDate={currentDate}
+          assignments={assignments}
+          studyBlocks={studyBlocks}
+          manualEvents={manualEvents}
+          course={course || { code: 'ALL', name: 'All Courses' }}
+          viewMode={viewMode}
+          currentView={currentView}
+          onEventClick={handleEventClick}
+          onNavigate={handleNavigate}
+        />
       </div>
 
       {/* Study Schedule Generation */}
@@ -267,25 +249,6 @@ function CalendarView({
         setPreferences={setPreferences}
         onClose={() => setShowSettingsModal(false)}
       />
-
-      {showParseModal && (
-        <ParserModal
-          courses={allCourses}
-          onClose={() => setShowParseModal(false)}
-          onComplete={(courseId, assignments) => {
-            console.log('Parsed assignments for course:', courseId, assignments);
-            setShowParseModal(false);
-          }}
-        />
-      )}
-
-      {/* Add Event FAB */}
-      <button
-        onClick={() => setShowAddModal(true)}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 flex items-center justify-center z-30"
-      >
-        <Plus className="w-6 h-6" />
-      </button>
     </div>
   );
 }

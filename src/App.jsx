@@ -1,10 +1,10 @@
-// src/App.jsx - Updated import path only
+// src/App.jsx - Fixed Calendar Assignment Passing
 import React, { useState, useEffect } from 'react';
 import { Upload, Plus } from 'lucide-react';
 import Logo from './components/Logo/Logo';
 import Dashboard from './components/Dashboard/Dashboard';
 import CalendarView from './components/Calendar/CalendarView';
-import ParserModal from './components/Parser/ParserModal'; // Same component, updated internally
+import ParserModal from './components/Parser/ParserModal';
 import CourseModal from './components/Course/CourseModal';
 import WelcomeScreen from './components/Dashboard/WelcomeScreen';
 import { formatAssignmentForDisplay } from './utils/assignmentHelpers';
@@ -19,9 +19,20 @@ function StudioraNursingPlanner() {
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [parsingResults, setParsingResults] = useState(null);
 
+  // Debug logging
+  useEffect(() => {
+    console.log('🔍 App state update:', {
+      coursesCount: courses.length,
+      selectedCourse: selectedCourse?.code,
+      selectedCourseAssignments: selectedCourse?.assignments?.length || 0,
+      currentView,
+      totalAssignments: courses.reduce((sum, c) => sum + (c.assignments?.length || 0), 0)
+    });
+  }, [courses, selectedCourse, currentView]);
+
   // Load saved data
   useEffect(() => {
-    const saved = localStorage.getItem('studiora_data');
+    const saved = localStorage.getItem('studioraData');
     if (saved) {
       try {
         const data = JSON.parse(saved);
@@ -48,7 +59,7 @@ function StudioraNursingPlanner() {
       parsingResults,
       lastSaved: new Date().toISOString()
     };
-    localStorage.setItem('studiora_data', JSON.stringify(data));
+    localStorage.setItem('studioraData', JSON.stringify(data));
   }, [courses, completedAssignments, parsingResults]);
 
   // Handle course creation
@@ -82,34 +93,108 @@ function StudioraNursingPlanner() {
     }
   };
 
-  // Handle parse complete - simplified with new parser
-  const handleParseComplete = (results) => {
+  // Add assignments to course - FIXED
+  const addAssignmentsToCourse = (courseId, assignments) => {
+    console.log('🔄 addAssignmentsToCourse called:', courseId, assignments.length);
+    console.log('📋 Available courses:', courses);
+
+    setCourses(prevCourses => {
+      const updatedCourses = prevCourses.map(course => {
+        if (course.id === courseId) {
+          console.log('✅ Target course found:', course.code);
+          
+          const formattedAssignments = assignments.map(a => ({
+            ...formatAssignmentForDisplay(a),
+            id: a.id || `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            courseId: courseId
+          }));
+
+          const updatedCourse = {
+            ...course,
+            assignments: [...(course.assignments || []), ...formattedAssignments]
+          };
+
+          console.log('✅ Course updated:', {
+            code: course.code,
+            previousCount: course.assignments?.length || 0,
+            newCount: updatedCourse.assignments.length,
+            addedCount: formattedAssignments.length
+          });
+
+          return updatedCourse;
+        }
+        return course;
+      });
+
+      console.log('🔄 Final state update:', updatedCourses);
+      return updatedCourses;
+    });
+  };
+
+  // Verification effect
+  useEffect(() => {
+    if (courses.length > 0) {
+      const totalAssignments = courses.reduce((sum, c) => sum + (c.assignments?.length || 0), 0);
+      const targetCourse = courses.find(c => c.code === 'NURS335');
+      
+      console.log('⏰ State verification:', {
+        courseExists: !!targetCourse,
+        assignmentCount: targetCourse?.assignments?.length || 0,
+        expectedCount: 41
+      });
+    }
+  }, [courses]);
+
+  // Handle parse complete - FIXED race condition
+  const handleParseComplete = (courseId, assignments) => {
+    console.log('📥 handleParseComplete called:', { courseId, assignmentsLength: assignments.length });
+    
     if (courses.length === 0) {
       alert('Please create a course first before importing assignments.');
       setShowCourseModal(true);
       return;
     }
-    setParsingResults(results);
-  };
 
-  // Add assignments to course
-  const addAssignmentsToCourse = (courseId, assignments) => {
-    setCourses(prevCourses => 
-      prevCourses.map(course => {
+    const targetCourse = courses.find(c => c.id === courseId);
+    if (!targetCourse) {
+      alert('Target course not found. Please try again.');
+      return;
+    }
+
+    console.log('✅ Adding assignments to course:', targetCourse.code);
+    
+    // Close parser modal immediately
+    setShowParser(false);
+    
+    // Update course with assignments
+    setCourses(prevCourses => {
+      const updatedCourses = prevCourses.map(course => {
         if (course.id === courseId) {
           const formattedAssignments = assignments.map(a => ({
             ...formatAssignmentForDisplay(a),
             id: a.id || `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             courseId: courseId
           }));
-          return {
+
+          const updatedCourse = {
             ...course,
-            assignments: [...course.assignments, ...formattedAssignments]
+            assignments: [...(course.assignments || []), ...formattedAssignments]
           };
+
+          // Navigate to calendar with the updated course immediately
+          setTimeout(() => {
+            console.log('🎯 Navigating to calendar with', updatedCourse.assignments.length, 'assignments');
+            setSelectedCourse(updatedCourse);
+            setCurrentView('calendar');
+          }, 50);
+
+          return updatedCourse;
         }
         return course;
-      })
-    );
+      });
+
+      return updatedCourses;
+    });
   };
 
   // Toggle assignment completion
@@ -135,6 +220,55 @@ function StudioraNursingPlanner() {
     );
   };
 
+  // Handle backup import
+  const handleImportBackup = (backupData) => {
+    try {
+      console.log('📥 Importing backup:', backupData);
+      
+      // Handle different backup formats
+      let dataToImport;
+      if (backupData.courses) {
+        // Direct format
+        dataToImport = {
+          courses: backupData.courses || [],
+          completed: backupData.completed || [],
+          parsingResults: backupData.parsingResults || null
+        };
+      } else if (backupData.assignments) {
+        // Legacy format - convert to new format
+        dataToImport = {
+          courses: [], // Empty, user will need to create courses
+          completed: [],
+          parsingResults: null
+        };
+        alert('Legacy backup detected. You\'ll need to recreate courses and re-import assignments.');
+      } else {
+        throw new Error('Invalid backup format');
+      }
+      
+      // Format assignments if needed
+      if (dataToImport.courses.length > 0) {
+        const formattedCourses = dataToImport.courses.map(course => ({
+          ...course,
+          assignments: (course.assignments || []).map(formatAssignmentForDisplay)
+        }));
+        setCourses(formattedCourses);
+      } else {
+        setCourses(dataToImport.courses);
+      }
+      
+      setCompletedAssignments(new Set(dataToImport.completed));
+      setParsingResults(dataToImport.parsingResults);
+      
+      console.log('✅ Backup imported successfully');
+      alert('Backup imported successfully!');
+      
+    } catch (error) {
+      console.error('❌ Import failed:', error);
+      alert('Failed to import backup: ' + error.message);
+    }
+  };
+
   // Clear all data
   const clearData = () => {
     if (confirm('Clear all data and start fresh? This cannot be undone.')) {
@@ -142,13 +276,21 @@ function StudioraNursingPlanner() {
       setCompletedAssignments(new Set());
       setParsingResults(null);
       setSelectedCourse(null);
-      localStorage.removeItem('studiora_data');
+      localStorage.removeItem('studioraData');
     }
   };
 
-  // Handle course selection (null = all courses view)
+  // Handle course selection - FIXED
   const handleCourseSelect = (course) => {
-    setSelectedCourse(course);
+    console.log('🎯 Course selected:', course?.code || 'ALL', 'with', course?.assignments?.length || 'all', 'assignments');
+    
+    // Get the latest course data from state
+    let currentCourse = course;
+    if (course && course.id) {
+      currentCourse = courses.find(c => c.id === course.id) || course;
+    }
+    
+    setSelectedCourse(currentCourse);
     setCurrentView('calendar');
   };
 
@@ -158,14 +300,23 @@ function StudioraNursingPlanner() {
     setSelectedCourse(null);
   };
 
-  // Get all assignments across all courses
+  // Get all assignments across all courses - FIXED
   const allAssignments = courses.flatMap(course => 
-    course.assignments.map(a => ({ 
+    (course.assignments || []).map(a => ({ 
       ...a, 
       courseCode: course.code, 
       courseName: course.name 
     }))
   );
+
+  // Get current course assignments - FIXED
+  const getCurrentCourseAssignments = () => {
+    if (!selectedCourse) return allAssignments;
+    
+    // Always get the latest course data from state
+    const currentCourse = courses.find(c => c.id === selectedCourse.id);
+    return currentCourse?.assignments || [];
+  };
 
   // Show welcome screen if no courses
   const showWelcome = courses.length === 0 && currentView === 'dashboard';
@@ -237,6 +388,7 @@ function StudioraNursingPlanner() {
         {showWelcome && (
           <WelcomeScreen
             onCreateCourse={() => setShowCourseModal(true)}
+            onImportBackup={handleImportBackup}
           />
         )}
 
@@ -254,11 +406,11 @@ function StudioraNursingPlanner() {
           />
         )}
 
-        {/* Calendar View */}
+        {/* Calendar View - FIXED */}
         {currentView === 'calendar' && courses.length > 0 && (
           <CalendarView
             course={selectedCourse}
-            assignments={selectedCourse ? selectedCourse.assignments : allAssignments}
+            assignments={getCurrentCourseAssignments()}
             allCourses={courses}
             showAllCourses={!selectedCourse}
             completedAssignments={completedAssignments}
@@ -277,15 +429,12 @@ function StudioraNursingPlanner() {
         />
       )}
 
-      {/* Parser Modal - now uses simplified sequential parser */}
+      {/* Parser Modal */}
       {showParser && (
         <ParserModal 
           courses={courses}
           onClose={() => setShowParser(false)} 
-          onComplete={(courseId, assignments) => {
-            addAssignmentsToCourse(courseId, assignments);
-            setShowParser(false);
-          }}
+          onComplete={handleParseComplete}
         />
       )}
     </div>

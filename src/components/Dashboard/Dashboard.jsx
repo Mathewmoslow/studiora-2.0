@@ -1,4 +1,4 @@
-// src/components/Dashboard/Dashboard.jsx - FINAL VERSION
+// src/components/Dashboard/Dashboard.jsx - Updated to handle course import
 import React, { useState } from 'react';
 import { BookOpen, Clock, AlertCircle, Target } from 'lucide-react';
 import StatsCard from './StatsCard';
@@ -113,6 +113,7 @@ function Dashboard({
                   setShowEditModal(true);
                 }}
                 onDelete={() => onDeleteCourse(course.id)}
+                onImport={() => onImport(course)}
               />
             ))}
           </div>

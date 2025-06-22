@@ -1,9 +1,45 @@
-// src/components/Dashboard/WelcomeScreen.jsx
-import React from 'react';
+// src/components/Dashboard/WelcomeScreen.jsx - With Import
+import React, { useRef } from 'react';
 import { Plus, Upload, Calendar, Clock } from 'lucide-react';
 import Logo from '../Logo/Logo';
 
-function WelcomeScreen({ onCreateCourse }) {
+function WelcomeScreen({ onCreateCourse, onImportData }) {
+  const fileInputRef = useRef(null);
+
+  const handleImport = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const importedData = JSON.parse(e.target.result);
+        
+        // Handle different backup formats
+        let dataToSave;
+        if (importedData.courses) {
+          dataToSave = {
+            courses: importedData.courses || [],
+            completed: importedData.completed || [],
+            parsingResults: importedData.parsingResults || null,
+            lastSaved: new Date().toISOString()
+          };
+        } else {
+          throw new Error('Invalid backup format - missing courses data');
+        }
+        
+        localStorage.setItem('studioraData', JSON.stringify(dataToSave));
+        alert('Data imported successfully! Refreshing page...');
+        window.location.reload();
+        
+      } catch (error) {
+        console.error('Import error:', error);
+        alert('Failed to import data. Please check the file format.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
   return (
     <div className="min-h-[600px] flex items-center justify-center">
       <div className="text-center max-w-2xl mx-auto px-4">
@@ -18,8 +54,35 @@ function WelcomeScreen({ onCreateCourse }) {
         </div>
 
         <div className="bg-white rounded-lg shadow-lg p-8 mb-8">
-          <h2 className="text-2xl font-semibold mb-6">Get Started in 3 Easy Steps</h2>
+          <h2 className="text-2xl font-semibold mb-6">Get Started</h2>
           
+          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-6">
+            <button
+              onClick={onCreateCourse}
+              className="studiora-gradient text-white px-8 py-3 rounded-lg hover:opacity-90 transition-opacity flex items-center space-x-2 justify-center text-lg font-medium"
+            >
+              <Plus className="h-5 w-5" />
+              <span>Create Your First Course</span>
+            </button>
+            
+            <div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json"
+                onChange={handleImport}
+                className="hidden"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 justify-center text-lg font-medium"
+              >
+                <Upload className="h-5 w-5" />
+                <span>Import Backup</span>
+              </button>
+            </div>
+          </div>
+
           <div className="space-y-6 text-left">
             <div className="flex items-start space-x-4">
               <div className="bg-blue-100 rounded-full p-3 flex-shrink-0">
@@ -51,14 +114,6 @@ function WelcomeScreen({ onCreateCourse }) {
               </div>
             </div>
           </div>
-
-          <button
-            onClick={onCreateCourse}
-            className="mt-8 studiora-gradient text-white px-8 py-3 rounded-lg hover:opacity-90 transition-opacity flex items-center space-x-2 mx-auto text-lg font-medium"
-          >
-            <Plus className="h-5 w-5" />
-            <span>Create Your First Course</span>
-          </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

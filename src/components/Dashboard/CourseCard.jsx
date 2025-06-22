@@ -1,8 +1,8 @@
-// src/components/Dashboard/CourseCard.jsx - FINAL VERSION
+// src/components/Dashboard/CourseCard.jsx - Added import button
 import React from 'react';
-import { Calendar, Edit2, Trash2 } from 'lucide-react';
+import { Calendar, Edit2, Trash2, Upload } from 'lucide-react';
 
-function CourseCard({ course, completedAssignments, onSelect, onEdit, onDelete }) {
+function CourseCard({ course, completedAssignments, onSelect, onEdit, onDelete, onImport }) {
   const courseAssignments = course.assignments || [];
   const completed = courseAssignments.filter(a => completedAssignments.has(a.id)).length;
   const progress = courseAssignments.length > 0 ? (completed / courseAssignments.length) * 100 : 0;
@@ -39,6 +39,16 @@ function CourseCard({ course, completedAssignments, onSelect, onEdit, onDelete }
           <p className="text-sm text-gray-600">{course.code}</p>
         </div>
         <div className="flex gap-1">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onImport();
+            }}
+            className="p-1 hover:bg-white rounded transition-colors"
+            title="Import assignments"
+          >
+            <Upload className="w-4 h-4 text-blue-600" />
+          </button>
           <button
             onClick={(e) => {
               e.stopPropagation();
