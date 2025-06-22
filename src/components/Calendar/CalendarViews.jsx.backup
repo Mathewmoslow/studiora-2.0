@@ -1,0 +1,208 @@
+// src/components/Calendar/CalendarViews.jsx - BRUTE FORCE FIX
+import React, { useState, useEffect } from 'react';
+import { Calendar, dateFnsLocalizer } from 'react-big-calendar';
+import { format, parse, startOfWeek, getDay } from 'date-fns';
+import { enUS } from 'date-fns/locale';
+import 'react-big-calendar/lib/css/react-big-calendar.css';
+
+const locales = { 'en-US': enUS };
+const localizer = dateFnsLocalizer({
+  format,
+  parse,
+  startOfWeek: (date) => startOfWeek(date, { weekStartsOn: 1 }),
+  getDay,
+  locales,
+});
+
+export function BigCalendarView({ 
+  currentDate, 
+  assignments = [], 
+  studyBlocks = [], 
+  manualEvents = [], 
+  course, 
+  viewMode, 
+  currentView,
+  onEventClick = () => {},
+  onNavigate = () => {}
+}) {
+  const [view, setView] = useState(currentView || 'month');
+  const [forceUpdate, setForceUpdate] = useState(0);
+  const [actualEvents, setActualEvents] = useState([]);
+
+  // BRUTE FORCE: Get assignments directly from localStorage every 500ms
+  useEffect(() => {
+    const interval = setInterval(() => {
+      try {
+        const data = JSON.parse(localStorage.getItem('studioraData') || '{}');
+        const allAssignments = [];
+        
+        if (data.courses) {
+          data.courses.forEach(course => {
+            if (course.assignments) {
+              course.assignments.forEach(assignment => {
+                allAssignments.push({
+                  ...assignment,
+                  courseCode: course.code
+                });
+              });
+            }
+          });
+        }
+        
+        console.log('🔄 BRUTE FORCE: Found', allAssignments.length, 'assignments in localStorage');
+        
+        if (allAssignments.length > 0) {
+          const events = allAssignments.map((assignment, index) => {
+            const startDate = new Date(assignment.date);
+            return {
+              id: assignment.id || `assignment_${index}`,
+              title: assignment.text,
+              start: startDate,
+              end: new Date(startDate.getTime() + 60 * 60 * 1000),
+              allDay: false,
+              resource: {
+                type: assignment.type || 'assignment',
+                source: 'assignment',
+                courseCode: assignment.courseCode,
+                data: assignment
+              }
+            };
+          });
+          
+          setActualEvents(events);
+          setForceUpdate(prev => prev + 1);
+        }
+      } catch (error) {
+        console.error('🚨 BRUTE FORCE ERROR:', error);
+      }
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Also try to format passed assignments
+  useEffect(() => {
+    if (assignments.length > 0) {
+      console.log('📋 Formatting passed assignments:', assignments.length);
+      const events = assignments.map((assignment, index) => {
+        const startDate = new Date(assignment.date);
+        return {
+          id: assignment.id || `passed_${index}`,
+          title: assignment.text,
+          start: startDate,
+          end: new Date(startDate.getTime() + 60 * 60 * 1000),
+          allDay: false,
+          resource: {
+            type: assignment.type || 'assignment',
+            source: 'passed',
+            courseCode: course?.code,
+            data: assignment
+          }
+        };
+      });
+      setActualEvents(events);
+    }
+  }, [assignments]);
+
+  const handleViewChange = (newView) => {
+    setView(newView);
+  };
+
+  const handleSelectEvent = (event) => {
+    onEventClick({
+      id: event.id,
+      title: event.title,
+      date: event.start,
+      type: event.resource.type,
+      data: event.resource.data
+    });
+  };
+
+  const currentMonth = currentDate.getMonth();
+  const currentYear = currentDate.getFullYear();
+  const eventsInCurrentMonth = actualEvents.filter(event => {
+    const eventDate = new Date(event.start);
+    return eventDate.getMonth() === currentMonth && eventDate.getFullYear() === currentYear;
+  });
+
+  console.log('🎯 RENDERING CALENDAR:', {
+    totalEvents: actualEvents.length,
+    eventsInCurrentMonth: eventsInCurrentMonth.length,
+    currentView: `${currentDate.toLocaleString('default', { month: 'long' })} ${currentYear}`,
+    forceUpdate,
+    sampleEvent: actualEvents[0]
+  });
+
+  return (
+    <div className="h-full">
+      {/* STATUS BAR */}
+      <div className="bg-blue-100 border border-blue-300 p-2 text-sm mb-2 rounded">
+        <strong>📊 EVENTS:</strong> {actualEvents.length} total | 
+        {eventsInCurrentMonth.length} in {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })} |
+        Update #{forceUpdate}
+        <button 
+          onClick={() => setForceUpdate(prev => prev + 1)}
+          className="ml-2 px-2 py-1 bg-blue-600 text-white rounded text-xs"
+        >
+          Force Refresh
+        </button>
+      </div>
+      
+      {/* SIMPLE LIST VIEW IF CALENDAR FAILS */}
+      {actualEvents.length > 0 && eventsInCurrentMonth.length === 0 && (
+        <div className="bg-yellow-50 border p-3 rounded mb-2">
+          <p className="text-sm font-medium">No events in current month. Events found in:</p>
+          <div className="text-xs mt-1">
+            {Array.from(new Set(actualEvents.map(e => format(e.start, 'MMM yyyy')))).join(', ')}
+          </div>
+        </div>
+      )}
+      
+      <Calendar
+        key={forceUpdate}
+        localizer={localizer}
+        events={actualEvents}
+        startAccessor="start"
+        endAccessor="end"
+        date={currentDate}
+        onNavigate={onNavigate}
+        view={view}
+        onView={handleViewChange}
+        views={['month', 'week', 'day']}
+        onSelectEvent={handleSelectEvent}
+        popup={true}
+        showMultiDayTimes={false}
+        step={60}
+        timeslots={1}
+        culture="en-US"
+        style={{ height: 'calc(100% - 100px)', minHeight: '500px' }}
+        formats={{
+          weekdayFormat: (date, culture, localizer) =>
+            localizer.format(date, 'EEE', culture)
+        }}
+        components={{
+          event: ({ event }) => (
+            <div className="text-xs p-1 bg-blue-100 text-blue-800 rounded border">
+              {event.title}
+            </div>
+          )
+        }}
+      />
+      
+      {/* FALLBACK LIST */}
+      {actualEvents.length > 0 && (
+        <div className="mt-4 max-h-32 overflow-y-auto border rounded p-2">
+          <div className="text-xs font-medium mb-1">All Events:</div>
+          {actualEvents.slice(0, 10).map(event => (
+            <div key={event.id} className="text-xs py-1 border-b">
+              {format(event.start, 'MMM d')} - {event.title}
+            </div>
+          ))}
+          {actualEvents.length > 10 && <div className="text-xs text-gray-500">...and {actualEvents.length - 10} more</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default BigCalendarView;

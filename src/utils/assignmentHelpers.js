@@ -1,6 +1,7 @@
-// src/utils/assignmentHelpers.js - FINAL VERSION
+// src/utils/assignmentHelpers.js - FIXED undefined variables
 
 export const formatAssignmentForDisplay = (assignment) => {
+  // Define missing variables that were causing crashes
   const actionVerbs = {
     'reading': 'READ', 
     'video': 'WATCH', 
@@ -18,6 +19,22 @@ export const formatAssignmentForDisplay = (assignment) => {
     'paper': 'WRITE'
   };
 
+  const icons = {
+    'READ': '📖', 
+    'WATCH': '📺', 
+    'QUIZ': '❓', 
+    'TEST': '📝', 
+    'DO': '✏️',
+    'DISCUSS': '💬', 
+    'ATTEND': '🏥', 
+    'PRACTICE': '🎯', 
+    'STUDY': '📚',
+    'COMPLETE': '✅', 
+    'REVIEW': '🔄',
+    'WORK ON': '🔨',
+    'WRITE': '✍️'
+  };
+
   const priorities = {
     'exam': 'HIGH', 
     'quiz': 'MEDIUM', 
@@ -31,19 +48,22 @@ export const formatAssignmentForDisplay = (assignment) => {
     'paper': 'HIGH'
   };
 
-  const actionVerb = actionVerbs[assignment.type] || 'DO';
-  const priority = priorities[assignment.type] || 'MEDIUM';
+  const type = assignment.type?.toLowerCase() || 'assignment';
+  const actionVerb = actionVerbs[type] || 'DO';
+  const priority = priorities[type] || 'MEDIUM';
+  const icon = icons[actionVerb] || '📋';
   
   let cleanText = assignment.text
-    .replace(/^(assignment|quiz|exam|reading|video|discussion)[\s:]+/i, '')
-    .replace(/\s*\(due[^)]*\)/i, '')
-    .trim();
+    ?.replace(/^(assignment|quiz|exam|reading|video|discussion)[\s:]+/i, '')
+    ?.replace(/\s*\(due[^)]*\)/i, '')
+    ?.trim() || '';
 
   return {
     ...assignment,
     actionVerb, 
     priority, 
     cleanText,
+    icon,
     displayTitle: `${actionVerb}: ${cleanText}`,
     hours: assignment.hours || estimateHours(assignment)
   };

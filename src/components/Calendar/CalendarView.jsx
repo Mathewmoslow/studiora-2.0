@@ -1,7 +1,7 @@
-// src/components/Calendar/CalendarView.jsx - Removed import button and ParserModal
+// src/components/Calendar/CalendarView.jsx - FIXED IMPORT
 import React, { useState, useEffect } from 'react';
 import { Settings, Zap, ArrowLeft } from 'lucide-react';
-import BigCalendarView from './CalendarViews';
+import BigCalendarView from './CalendarViews'; // FIXED: Default import
 import CalendarStats from './CalendarStats';
 import { EventModal, AddEventModal, SettingsModal } from './EventModals';
 
